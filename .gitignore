@@ -1,0 +1,12 @@
+.bloop
+.metals/
+.vscode/
+.bsp/
+.idea/
+out/
+result*
+/dependencies/
+target/
+.envrc
+.direnv/
+
