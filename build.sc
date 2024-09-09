@@ -41,6 +41,17 @@ trait AXI4 extends millbuild.dependencies.`chisel-interface`.common.AXI4Module {
   def chiselPluginIvy = None
 }
 
+// API to be upstreamed to axi4
+object regrouter extends millbuild.common.HasChisel with ScalafmtModule {
+  def scalaVersion = T(v.scala)
+  override def moduleDeps = super.moduleDeps ++ Seq(axi4)
+
+  def chiselModule = Some(chisel)
+  def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
+  def chiselIvy = None
+  def chiselPluginIvy = None
+}
+
 object dwbb extends DWBB
 
 trait DWBB extends millbuild.dependencies.`chisel-interface`.common.DWBBModule {
@@ -76,6 +87,7 @@ trait ACLINT extends millbuild.common.ACLINTModule with ScalafmtModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselIvy = None
   def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 /** [[https://github.com/riscv/riscv-plic-spec]] */
@@ -90,6 +102,7 @@ trait PLIC extends millbuild.common.PLICModule with ScalafmtModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselIvy = None
   def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 /** [[https://github.com/riscv/riscv-debug-spec]] */
@@ -104,6 +117,7 @@ trait DM extends millbuild.common.DMModule with ScalafmtModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselIvy = None
   def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 /** [[https://github.com/riscv/riscv-fast-interrupt]] */
@@ -118,6 +132,7 @@ trait CLIC extends millbuild.common.CLICModule with ScalafmtModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselIvy = None
   def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 /** [[https://github.com/riscv/riscv-aia]] */
@@ -132,6 +147,7 @@ trait AIA extends millbuild.common.AIAModule with ScalafmtModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselIvy = None
   def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 /** [[https://github.com/riscv/riscv-aia]] */
@@ -146,6 +162,7 @@ trait IOMMU extends millbuild.common.IOMMUModule with ScalafmtModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselIvy = None
   def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 object elaborator extends Elaborator
@@ -165,6 +182,7 @@ trait Elaborator extends millbuild.common.ElaboratorModule {
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
   def chiselPluginIvy = None
   def chiselIvy = None
+  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
 object panamaconverter extends PanamaConverter
