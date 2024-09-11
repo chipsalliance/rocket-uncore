@@ -150,6 +150,38 @@ trait IOMMU extends millbuild.common.IOMMUModule with ScalafmtModule {
   override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
+object sailtile extends SailTile
+trait SailTile extends millbuild.common.SailTileModule with ScalafmtModule {
+  def scalaVersion = T(v.scala)
+
+  def axi4Module: ScalaModule = axi4
+  def dwbbModule: ScalaModule = dwbb
+
+  def chiselModule = Some(chisel)
+  def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
+  def chiselIvy = None
+  def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps
+}
+
+object testbench extends Testbench
+trait Testbench extends millbuild.common.TestbenchModule with ScalafmtModule {
+  def scalaVersion = T(v.scala)
+
+  def aclintModule:   ScalaModule = aclint
+  def plicModule:     ScalaModule = plic
+  def dmModule:       ScalaModule = dm
+  def aiaModule:      ScalaModule = aia
+  def iommuModule:    ScalaModule = iommu
+  def sailtileModule: ScalaModule = sailtile
+
+  def chiselModule = Some(chisel)
+  def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
+  def chiselIvy = None
+  def chiselPluginIvy = None
+  override def moduleDeps = super.moduleDeps
+}
+
 object elaborator extends Elaborator
 trait Elaborator extends millbuild.common.ElaboratorModule {
   def scalaVersion = T(v.scala)
@@ -159,7 +191,7 @@ trait Elaborator extends millbuild.common.ElaboratorModule {
   def circtInstallPath =
     T.input(PathRef(os.Path(T.ctx().env("CIRCT_INSTALL_PATH"))))
 
-  def generators = Seq(gcd, aclint, plic, dm, clic, aia, iommu)
+  def generators = Seq(gcd, aclint, plic, dm, aia, iommu, sailtile, testbench)
 
   def mainargsIvy = v.mainargs
 

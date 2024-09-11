@@ -68,3 +68,23 @@ trait AIAModule extends HasChisel {
 trait IOMMUModule extends HasChisel {
   def axi4Module: ScalaModule
 }
+trait SailTileModule extends HasChisel with HasChiselInterface {
+  def axi4Module: ScalaModule
+}
+trait TestbenchModule extends HasChisel {
+  def aclintModule:   ScalaModule
+  def plicModule:     ScalaModule
+  def dmModule:       ScalaModule
+  def aiaModule:      ScalaModule
+  def iommuModule:    ScalaModule
+  def sailtileModule: ScalaModule
+
+  override def moduleDeps: Seq[JavaModule] = super.moduleDeps ++ Seq(
+    aclintModule,
+    plicModule,
+    dmModule,
+    aiaModule,
+    iommuModule,
+    sailtileModule
+  )
+}
