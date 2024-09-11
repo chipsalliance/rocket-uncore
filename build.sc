@@ -120,21 +120,6 @@ trait DM extends millbuild.common.DMModule with ScalafmtModule {
   override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
 }
 
-/** [[https://github.com/riscv/riscv-fast-interrupt]] */
-object clic extends CLIC
-trait CLIC extends millbuild.common.CLICModule with ScalafmtModule {
-  def scalaVersion = T(v.scala)
-
-  def axi4Module: ScalaModule = axi4
-  def dwbbModule: ScalaModule = dwbb
-
-  def chiselModule = Some(chisel)
-  def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
-  def chiselIvy = None
-  def chiselPluginIvy = None
-  override def moduleDeps = super.moduleDeps ++ Seq(regrouter)
-}
-
 /** [[https://github.com/riscv/riscv-aia]] */
 object aia extends AIA
 trait AIA extends millbuild.common.AIAModule with ScalafmtModule {

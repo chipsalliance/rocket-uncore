@@ -62,9 +62,6 @@ trait PLICModule extends HasChisel {
 trait DMModule extends HasChisel {
   def axi4Module: ScalaModule
 }
-trait CLICModule extends HasChisel {
-  def axi4Module: ScalaModule
-}
 trait AIAModule extends HasChisel {
   def axi4Module: ScalaModule
 }
