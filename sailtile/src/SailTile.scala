@@ -6,9 +6,11 @@ package org.chipsalliance.sailtile
 import chisel3._
 import chisel3.experimental.hierarchy.{Instance, Instantiate, instantiable}
 import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
+import chisel3.experimental.dataview.DataViewable
 import chisel3.probe.{Probe, ProbeValue, define}
 import chisel3.properties.{AnyClassType, Class, Property}
-import org.chipsalliance.amba.axi4.bundle.{AXI4BundleParameter, AXI4ROIrrevocable, AXI4RWIrrevocable}
+import chisel3.util.circt.dpi.RawClockedVoidFunctionCall
+import org.chipsalliance.amba.axi4.bundle._
 
 object SailAXI4TileParameter {
   implicit def rwP: upickle.default.ReadWriter[SailAXI4TileParameter] =
@@ -72,6 +74,49 @@ class SailAXI4Tile(val parameter: SailAXI4TileParameter)
 
   // Reset
   // @reset (hartId, resetVector) -> ()
+  RawClockedVoidFunctionCall("sail_reset")(io.clock, io.reset, io.hartid, io.resetVector)
+
   // SoC step
   // (hartId, Interrupt, Memory Respond(flit)) -> (Memory Request(flit), Trace)
+  val loadStoreAXI = io.loadStoreAXI.viewAs[AXI4RWIrrevocableVerilog]
+  val loadStoreAgent = Module(
+    new AXI4MasterAgent(
+      AXI4MasterAgentParameter(
+        name = "loadStoreAXI",
+        axiParameter = parameter.loadStoreParameter,
+        outstanding = 4,
+        readPayloadSize = 8,
+        writePayloadSize = 8
+      )
+    ).suggestName("axi4_channel0_loadStoreAXI")
+  )
+  loadStoreAgent.io.channel match {
+    case io: AXI4RWIrrevocableVerilog => io <> loadStoreAXI
+  }
+  loadStoreAgent.io.clock := io.clock
+  loadStoreAgent.io.reset := io.reset
+  loadStoreAgent.io.channelId := 0.U
+  loadStoreAgent.io.gateRead := false.B
+  loadStoreAgent.io.gateWrite := false.B
+
+  val instructionFetchAXI = io.instructionFetchAXI.viewAs[AXI4ROIrrevocableVerilog]
+  val instructionFetchAgent = Module(
+    new AXI4MasterAgent(
+      AXI4MasterAgentParameter(
+        name = "instructionFetchAXI",
+        axiParameter = parameter.instructionFetchParameter,
+        outstanding = 4,
+        readPayloadSize = 8,
+        writePayloadSize = 8
+      )
+    ).suggestName("axi4_channel1_instructionFetchAXI")
+  )
+  instructionFetchAgent.io.channel match {
+    case io: AXI4ROIrrevocableVerilog => io <> instructionFetchAXI
+  }
+  loadStoreAgent.io.clock := io.clock
+  loadStoreAgent.io.reset := io.reset
+  loadStoreAgent.io.channelId := 1.U
+  loadStoreAgent.io.gateRead := false.B
+  loadStoreAgent.io.gateWrite := false.B
 }
