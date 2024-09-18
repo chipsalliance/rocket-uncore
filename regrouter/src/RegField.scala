@@ -20,8 +20,7 @@ import org.chipsalliance.amba.RegFieldAccessType._
 
 object RegFieldWrType extends scala.Enumeration {
   type RegFieldWrType = Value
-  val ONE_TO_CLEAR, ONE_TO_SET, ONE_TO_TOGGLE, ZERO_TO_CLEAR,
-  ZERO_TO_SET, ZERO_TO_TOGGLE, CLEAR, SET, MODIFY = Value
+  val ONE_TO_CLEAR, ONE_TO_SET, ONE_TO_TOGGLE, ZERO_TO_CLEAR, ZERO_TO_SET, ZERO_TO_TOGGLE, CLEAR, SET, MODIFY = Value
 }
 import org.chipsalliance.amba.RegFieldWrType._
 
@@ -37,42 +36,44 @@ import org.chipsalliance.amba.RegFieldRdAction._
 // of a Register to match the IP-XACT concept.
 // TODO: This should be a Class and expose to OM
 case class RegFieldDesc(
-                         // A short name of the register field, which
-                         // could be expected to be used in macros/diagrams
-                         name: String,
-                         // A longer documentation of what the register
-                         // field does.
-                         desc: String,
-                         // The "register" name that this register field can be
-                         // considered to be a part of, in traditional ways of
-                         // thinking about memory mapped control registers as being
-                         // fixed in size. Generally expected to be used in macros/diagrams
-                         group: Option[String] = None,
-                         // A "register" description for the above group, a longer
-                         // description of what the register does.
-                         groupDesc: Option[String] = None,
-                         // The general access type of the register field
-                         access: RegFieldAccessType = RegFieldAccessType.RW,
-                         // The special write type of the register field
-                         wrType: Option[RegFieldWrType] = None,
-                         // the special read side effects of the register field
-                         rdAction: Option[RegFieldRdAction] = None,
-                         // Whether this register field can change between reads without
-                         // being accessed again by the bus interface
-                         volatile: Boolean = false,
-                         // TODO: testable?
-                         // The reset value of this register, if it has one
-                         reset: Option[BigInt] = None,
-                         // Enumerated values that this register field can take
-                         enumerations: Map[BigInt, (String, String)] = Map(),
-                         // The IP-XACT concept of an addressBlock which this
-                         // register field can consider to be a part of, if exporting
-                         // IP-XACT or similar outputs.
-                         addressBlock: Option[AddressBlockInfo] = None
-                         // TODO: registerFiles
-                       ) {
-  require(RegFieldDesc.nameAcceptable(name),
-    s"RegFieldDesc.name of '$name' is not of the form '${RegFieldDesc.nameRegex.toString}'")
+  // A short name of the register field, which
+  // could be expected to be used in macros/diagrams
+  name: String,
+  // A longer documentation of what the register
+  // field does.
+  desc: String,
+  // The "register" name that this register field can be
+  // considered to be a part of, in traditional ways of
+  // thinking about memory mapped control registers as being
+  // fixed in size. Generally expected to be used in macros/diagrams
+  group: Option[String] = None,
+  // A "register" description for the above group, a longer
+  // description of what the register does.
+  groupDesc: Option[String] = None,
+  // The general access type of the register field
+  access: RegFieldAccessType = RegFieldAccessType.RW,
+  // The special write type of the register field
+  wrType: Option[RegFieldWrType] = None,
+  // the special read side effects of the register field
+  rdAction: Option[RegFieldRdAction] = None,
+  // Whether this register field can change between reads without
+  // being accessed again by the bus interface
+  volatile: Boolean = false,
+  // TODO: testable?
+  // The reset value of this register, if it has one
+  reset: Option[BigInt] = None,
+  // Enumerated values that this register field can take
+  enumerations: Map[BigInt, (String, String)] = Map(),
+  // The IP-XACT concept of an addressBlock which this
+  // register field can consider to be a part of, if exporting
+  // IP-XACT or similar outputs.
+  addressBlock: Option[AddressBlockInfo] = None
+  // TODO: registerFiles
+) {
+  require(
+    RegFieldDesc.nameAcceptable(name),
+    s"RegFieldDesc.name of '$name' is not of the form '${RegFieldDesc.nameRegex.toString}'"
+  )
 
   // We could also check for group name here, but that can have a
   // significant runtime overhead because every RegField can be
@@ -90,7 +91,7 @@ object RegFieldDesc {
 
   def nameAcceptable(name: String): Boolean = name match {
     case RegFieldDesc.nameRegex(_*) => true
-    case _ => false
+    case _                          => false
   }
 }
 
@@ -102,8 +103,10 @@ object RegFieldDesc {
 
 object RegFieldGroup {
   def apply(name: String, desc: Option[String], regs: Seq[RegField], descFirstOnly: Boolean = true): Seq[RegField] = {
-    require(RegFieldDesc.nameAcceptable(name),
-      s"RegFieldDesc.group of '$name' is not of the form '${RegFieldDesc.nameRegex.toString}'")
+    require(
+      RegFieldDesc.nameAcceptable(name),
+      s"RegFieldDesc.group of '$name' is not of the form '${RegFieldDesc.nameRegex.toString}'"
+    )
     regs.zipWithIndex.map { case (r, i) =>
       val gDesc = if ((i > 0) & descFirstOnly) None else desc
       r.desc.map { d =>
@@ -120,24 +123,22 @@ object RegFieldGroup {
 // concept of an AddressBlock.
 
 case class AddressBlockInfo(
-                             // The short name of the address block
-                             name: String,
-                             addressOffset: BigInt, // Offset of the address block (in bytes) from the MemoryMap base / base of the Register Router node.
-                             // This is generally NOT an absoluate address.
-                             // Note this is NOT expected to be considered as part of RegField's offset:
-                             // adding an AddressBlockInfo should not change that value in the RegField serialized to JSON or OM, for example.
-                             range: BigInt, // Size of the address block (in bytes)
-                             width: Int // assumed access size of registers in this block (e.g. 32 or 64 bits).
-                             // Again this is ONLY documentation. RegField hardware generation ignores this.
-                           );
+  // The short name of the address block
+  name: String,
+  addressOffset: BigInt, // Offset of the address block (in bytes) from the MemoryMap base / base of the Register Router node.
+  // This is generally NOT an absoluate address.
+  // Note this is NOT expected to be considered as part of RegField's offset:
+  // adding an AddressBlockInfo should not change that value in the RegField serialized to JSON or OM, for example.
+  range: BigInt, // Size of the address block (in bytes)
+  width: Int // assumed access size of registers in this block (e.g. 32 or 64 bits).
+  // Again this is ONLY documentation. RegField hardware generation ignores this.
+);
 
 // Add the AddressBlock to a list of RegFields' descriptions. If they have no RegFieldDesc,
 // this has no effect.
 object RegFieldAddressBlock {
 
-  def apply(addressBlockInfo: AddressBlockInfo,
-            addAddressOffset: Boolean,
-            regmap: RegField.Map*): Seq[RegField.Map] = {
+  def apply(addressBlockInfo: AddressBlockInfo, addAddressOffset: Boolean, regmap: RegField.Map*): Seq[RegField.Map] = {
     regmap.toList.map { regmapEntry =>
       // each entry has a form like offset -> Seq[RegField]
       // We either add the addressBlockInfo.addressOffset or not
@@ -166,15 +167,13 @@ class RegisterWriteIO[T <: Data](gen: T) extends Bundle {
   val response = Irrevocable(Bool()) // ignore .bits
 }
 
-
 class SimpleRegIO(val w: Int) extends Bundle {
   val d = Input(UInt(w.W))
   val q = Output(UInt(w.W))
   val en = Input(Bool())
 }
 
-
-case class RegReadFn private(combinational: Boolean, fn: (Bool, Bool) => (Bool, Bool, UInt))
+case class RegReadFn private (combinational: Boolean, fn: (Bool, Bool) => (Bool, Bool, UInt))
 
 object RegReadFn {
   // (ivalid: Bool, oready: Bool) => (iready: Bool, ovalid: Bool, data: UInt)
@@ -196,10 +195,13 @@ object RegReadFn {
   // valid must not combinationally depend on ready
   // effects must become visible on the cycle after valid && ready
   implicit def apply(x: Bool => (Bool, UInt)) =
-    new RegReadFn(true, { case (_, oready) =>
-      val (ovalid, data) = x(oready)
-      (true.B, ovalid, data)
-    })
+    new RegReadFn(
+      true,
+      { case (_, oready) =>
+        val (ovalid, data) = x(oready)
+        (true.B, ovalid, data)
+      }
+    )
 
   // read from a ReadyValidIO (only safe if there is a consistent source of data)
   implicit def apply(x: ReadyValidIO[UInt]): RegReadFn = RegReadFn(ready => {
@@ -214,7 +216,7 @@ object RegReadFn {
   implicit def apply(x: Unit): RegReadFn = RegReadFn(0.U)
 }
 
-case class RegWriteFn private(combinational: Boolean, fn: (Bool, Bool, UInt) => (Bool, Bool))
+case class RegWriteFn private (combinational: Boolean, fn: (Bool, Bool, UInt) => (Bool, Bool))
 
 object RegWriteFn {
   // (ivalid: Bool, oready: Bool, data: UInt) => (iready: Bool, ovalid: Bool)
@@ -238,9 +240,12 @@ object RegWriteFn {
   // effects must become visible on the cycle after valid && ready
   implicit def apply(x: (Bool, UInt) => Bool) =
     // combinational => data valid on oready
-    new RegWriteFn(true, { case (_, oready, data) =>
-      (true.B, x(oready, data))
-    })
+    new RegWriteFn(
+      true,
+      { case (_, oready, data) =>
+        (true.B, x(oready, data))
+      }
+    )
 
   // write to a DecoupledIO (only safe if there is a consistent sink draining data)
   // NOTE: this is not an IrrevocableIO (even on TL2) because other fields could cause a lowered valid
@@ -297,7 +302,7 @@ case class RegField(width: Int, read: RegReadFn, write: RegWriteFn, desc: Option
         }).filter(_.nonEmpty)
       }))
   }
-  */
+   */
 }
 
 object RegField {
@@ -318,32 +323,43 @@ object RegField {
 
   def r(n: Int, r: RegReadFn): RegField = apply(n, r, (), None)
 
-  def r(n: Int, r: RegReadFn, desc: RegFieldDesc): RegField = apply(n, r, (), Some(desc.copy(access = RegFieldAccessType.R)))
+  def r(n: Int, r: RegReadFn, desc: RegFieldDesc): RegField =
+    apply(n, r, (), Some(desc.copy(access = RegFieldAccessType.R)))
 
   def w(n: Int, w: RegWriteFn): RegField = apply(n, (), w, None)
 
-  def w(n: Int, w: RegWriteFn, desc: RegFieldDesc): RegField = apply(n, (), w, Some(desc.copy(access = RegFieldAccessType.W)))
+  def w(n: Int, w: RegWriteFn, desc: RegFieldDesc): RegField =
+    apply(n, (), w, Some(desc.copy(access = RegFieldAccessType.W)))
 
   // This RegField allows 'set' to set bits in 'reg'.
   // and to clear bits when the bus writes bits of value 1.
   // Setting takes priority over clearing.
   def w1ToClear(n: Int, reg: UInt, set: UInt, desc: Option[RegFieldDesc] = None): RegField =
-    RegField(n, reg, RegWriteFn((valid, data) => {
-      reg := (~((~reg) | Mux(valid, data, 0.U))) | set;
-      true.B
-    }),
+    RegField(
+      n,
+      reg,
+      RegWriteFn((valid, data) => {
+        reg := (~((~reg) | Mux(valid, data, 0.U))) | set;
+        true.B
+      }),
       desc.map {
         _.copy(access = RegFieldAccessType.RW, wrType = Some(RegFieldWrType.ONE_TO_CLEAR), volatile = true)
-      })
+      }
+    )
 
   // This RegField wraps an explicit register
   // (e.g. Black-Boxed Register) to create a R/W register.
   def rwReg(n: Int, bb: SimpleRegIO, desc: Option[RegFieldDesc] = None): RegField =
-    RegField(n, bb.q, RegWriteFn((valid, data) => {
-      bb.en := valid
-      bb.d := data
-      true.B
-    }), desc)
+    RegField(
+      n,
+      bb.q,
+      RegWriteFn((valid, data) => {
+        bb.en := valid
+        bb.d := data
+        true.B
+      }),
+      desc
+    )
 
   // Create byte-sized read-write RegFields out of a large UInt register.
   // It is updated when any of the (implemented) bytes are written, the non-written
@@ -351,7 +367,10 @@ object RegField {
   // Because the RegField are all byte-sized, this is also suitable when a register is larger
   // than the intended bus width of the device (atomic updates are impossible).
   def bytes(reg: UInt, numBytes: Int, desc: Option[RegFieldDesc]): Seq[RegField] = {
-    require(reg.getWidth * 8 >= numBytes, "Can't break a ${reg.getWidth}-bit-wide register into only ${numBytes} bytes.")
+    require(
+      reg.getWidth * 8 >= numBytes,
+      "Can't break a ${reg.getWidth}-bit-wide register into only ${numBytes} bytes."
+    )
     val numFullBytes = reg.getWidth / 8
     val numPartialBytes = if ((reg.getWidth % 8) > 0) 1 else 0
     val numPadBytes = numBytes - numFullBytes - numPartialBytes
@@ -379,8 +398,10 @@ object RegField {
     }
     val partialBytes = if (numPartialBytes > 0) {
       val newDesc = desc.map { d => d.copy(name = d.name + s"_$numFullBytes") }
-      Seq(RegField(reg.getWidth % 8, oldBytes(numFullBytes), wrFn(numFullBytes), newDesc),
-        RegField(8 - (reg.getWidth % 8)))
+      Seq(
+        RegField(reg.getWidth % 8, oldBytes(numFullBytes), wrFn(numFullBytes), newDesc),
+        RegField(8 - (reg.getWidth % 8))
+      )
     } else Nil
     val padBytes = Seq.fill(numPadBytes) {
       RegField(8)
