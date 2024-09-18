@@ -1,0 +1,33 @@
+name: Elaborate RTL
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - labeled
+env:
+  USER: runner
+
+# Cancel the current workflow when new commit pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  elaborate-aclint:
+    name: "Elaborate ACLINT"
+    runs-on: [self-hosted, linux, nixos]
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: "Elaborate Design RTL"
+        if: "!cancelled()"
+        run: |
+          nix build '.#aclint.rtl'
+
