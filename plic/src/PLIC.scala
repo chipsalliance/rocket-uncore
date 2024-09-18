@@ -5,9 +5,9 @@
 package org.chipsalliance.uncore.plic
 
 import chisel3._
-import chisel3.experimental.hierarchy.{Instance, Instantiate, instantiable}
+import chisel3.experimental.hierarchy.{instantiable, Instance, Instantiate}
 import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import chisel3.probe.{Probe, ProbeValue, define}
+import chisel3.probe.{define, Probe, ProbeValue}
 import chisel3.properties.{AnyClassType, Class, Property}
 import chisel3.util.log2Ceil
 import org.chipsalliance.amba._
@@ -19,13 +19,14 @@ object PLICParameter {
 }
 
 /** Parameter of [[PLIC]] */
-case class PLICParameter(useAsyncReset: Boolean,
-                         base: BigInt,
-                         harts: Int,
-                         sources: Int,
-                         maxPriorities: Int,
-                         axi4parameter: AXI4BundleParameter,
-                        ) extends SerializableModuleParameter {
+case class PLICParameter(
+  useAsyncReset: Boolean,
+  base:          BigInt,
+  harts:         Int,
+  sources:       Int,
+  maxPriorities: Int,
+  axi4parameter: AXI4BundleParameter)
+    extends SerializableModuleParameter {
   def nDevices: Int = sources
 
   def minPriorities = math.min(maxPriorities, nDevices)
@@ -62,7 +63,7 @@ class PLICInterface(parameter: PLICParameter) extends Bundle {
 /** Hardware Implementation of PLIC */
 @instantiable
 class PLIC(val parameter: PLICParameter)
-  extends FixedIORawModule(new PLICInterface(parameter))
+    extends FixedIORawModule(new PLICInterface(parameter))
     with SerializableModule[PLICParameter]
     with ImplicitClock
     with ImplicitReset {
@@ -84,7 +85,8 @@ class PLIC(val parameter: PLICParameter)
       desc = s"Acting priority of interrupt source $i",
       group = Some(s"priority_${i}"),
       groupDesc = Some(s"Acting priority of interrupt source $i"),
-      reset = if (parameter.nPriorities > 0) None else Some(1))
+      reset = if (parameter.nPriorities > 0) None else Some(1)
+    )
 
   def pendingRegDesc(i: Int) =
     RegFieldDesc(
@@ -92,7 +94,8 @@ class PLIC(val parameter: PLICParameter)
       desc = s"Set to 1 if interrupt source $i is pending, regardless of its enable or priority setting.",
       group = Some("pending"),
       groupDesc = Some("Pending Bit Array. 1 Bit for each interrupt source."),
-      volatile = true)
+      volatile = true
+    )
 
   def enableRegDesc(i: Int, j: Int, wide: Int) = {
     val low = if (j == 0) 1 else j * 8
@@ -101,18 +104,15 @@ class PLIC(val parameter: PLICParameter)
       name = s"enables_${j}",
       desc = s"Targets ${low}-${high}. Set bits to 1 if interrupt should be enabled.",
       group = Some(s"enables_${i}"),
-      groupDesc = Some(s"Enable bits for each interrupt source for target $i. 1 bit for each interrupt source."))
+      groupDesc = Some(s"Enable bits for each interrupt source for target $i. 1 bit for each interrupt source.")
+    )
   }
 
   def thresholdRegDesc(i: Int) =
     RegFieldDesc(
       name = s"threshold_$i",
       desc = s"Interrupt & claim threshold for target $i. Maximum value is ${parameter.nPriorities}.",
-      reset    = if (parameter.nPriorities > 0) None else Some(1))
+      reset = if (parameter.nPriorities > 0) None else Some(1)
+    )
 
-}
-
-object PLICTestBenchParameter {
-  implicit def rwP: upickle.default.ReadWriter[PLICTestBenchParameter] =
-    upickle.default.macroRW
 }

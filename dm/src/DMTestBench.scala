@@ -10,6 +10,11 @@ import chisel3.properties.{AnyClassType, Class, Property}
 import chisel3.util.circt.dpi.RawUnclockedNonVoidFunctionCall
 import chisel3.util.{Counter, HasExtModuleInline}
 
+object DMTestBenchParameter {
+  implicit def rwP: upickle.default.ReadWriter[DMTestBenchParameter] =
+    upickle.default.macroRW
+}
+
 /** Parameter of [[DM]]. */
 case class DMTestBenchParameter(
   testVerbatimParameter: TestVerbatimParameter,

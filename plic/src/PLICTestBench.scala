@@ -10,6 +10,11 @@ import chisel3.properties.{AnyClassType, Class, Property}
 import chisel3.util.circt.dpi.RawUnclockedNonVoidFunctionCall
 import chisel3.util.{Counter, HasExtModuleInline}
 
+object PLICTestBenchParameter {
+  implicit def rwP: upickle.default.ReadWriter[PLICTestBenchParameter] =
+    upickle.default.macroRW
+}
+
 /** Parameter of [[PLIC]]. */
 case class PLICTestBenchParameter(
   testVerbatimParameter: TestVerbatimParameter,

@@ -31,10 +31,15 @@ object RegMapper {
 
   // Calling this method causes the matching AXI4 bundle to be
   // configured to route all requests to the listed RegFields.
-  def regmap(io: org.chipsalliance.amba.axi4.bundle.AXI4RWIrrevocable, concurrency: Int, undefZero: Boolean, mapping: RegField.Map*) = {
+  def regmap(
+    io:          org.chipsalliance.amba.axi4.bundle.AXI4RWIrrevocable,
+    concurrency: Int,
+    undefZero:   Boolean,
+    mapping:     RegField.Map*
+  ) = {
     val beatBytes: Int = io.dataWidth / 8
-    val addrMask: Int = io.dataWidth / 8
-    val idBits: Int = io.idWidth
+    val addrMask:  Int = io.dataWidth / 8
+    val idBits:    Int = io.idWidth
 
     val ar = io.ar
     val aw = io.aw
@@ -44,6 +49,12 @@ object RegMapper {
 
     val params = RegMapperParams(log2Up((addrMask + 1) / beatBytes), beatBytes, idBits)
     val in = Wire(Decoupled(new RegMapperInput(params)))
+
+    if (io.arUserWidth == 0) ar.bits.user := DontCare
+    if (io.awUserWidth == 0) aw.bits.user := DontCare
+    if (io.wUserWidth == 0) w.bits.user := DontCare
+    if (io.rUserWidth == 0) r.bits.user := DontCare
+    if (io.bUserWidth == 0) b.bits.user := DontCare
 
     // Prefer to execute reads first
     in.valid := ar.valid || (aw.valid && w.valid)
@@ -61,9 +72,7 @@ object RegMapper {
     in.bits.id := Mux(ar.valid, ar.bits.id, aw.bits.id)
 
     // Invoke the register map builder and make it Irrevocable
-    val out = Queue.irrevocable(
-      RegMapper(beatBytes, concurrency, undefZero, in, mapping: _*),
-      entries = 2)
+    val out = Queue.irrevocable(RegMapper(beatBytes, concurrency, undefZero, in, mapping: _*), entries = 2)
 
     // No flow control needed
     out.ready := Mux(out.bits.read, r.ready, b.ready)
@@ -80,9 +89,19 @@ object RegMapper {
   }
 
   // Create a generic register-based device
-  def apply(bytes: Int, concurrency: Int, undefZero: Boolean, in: DecoupledIO[RegMapperInput], mapping: RegField.Map*)(implicit sourceInfo: SourceInfo) = {
+  def apply(
+    bytes:       Int,
+    concurrency: Int,
+    undefZero:   Boolean,
+    in:          DecoupledIO[RegMapperInput],
+    mapping:     RegField.Map*
+  )(
+    implicit sourceInfo: SourceInfo
+  ) = {
     // Filter out zero-width fields
-    val bytemap: Seq[(Int, Seq[RegField])] = mapping.toList.map { case (offset, fields) => (offset, fields.filter(_.width != 0)) }
+    val bytemap: Seq[(Int, Seq[RegField])] = mapping.toList.map { case (offset, fields) =>
+      (offset, fields.filter(_.width != 0))
+    }
 
     // Negative addresses are bad
     bytemap.foreach { byte => require(byte._1 >= 0) }
@@ -90,11 +109,11 @@ object RegMapper {
     // Transform all fields into bit offsets Seq[(bit, field)]
     val bitmap: Seq[(Int, RegField)] = bytemap.flatMap { case (byte, fields) =>
       val bits = fields.scanLeft(byte * 8)(_ + _.width).init
-      bits zip fields
+      bits.zip(fields)
     }.sortBy(_._1)
 
     // Detect overlaps
-    (bitmap.init zip bitmap.tail) foreach { case ((lbit, lfield), (rbit, rfield)) =>
+    (bitmap.init.zip(bitmap.tail)).foreach { case ((lbit, lfield), (rbit, rfield)) =>
       require(lbit + lfield.width <= rbit, s"Register map overlaps at bit ${rbit}.")
     }
 
@@ -138,10 +157,11 @@ object RegMapper {
     // Calculate size and indexes into the register map
     val regSize = 1 << maskBits
 
-    def regIndexI(x: Int) = ofBits((maskFilter zip toBits(x)).filter(_._1).map(_._2))
+    def regIndexI(x: Int) = ofBits((maskFilter.zip(toBits(x))).filter(_._1).map(_._2))
 
-    def regIndexU(x: UInt) = if (maskBits == 0) 0.U else
-      Cat((maskFilter zip x.asBools).filter(_._1).map(_._2).reverse)
+    def regIndexU(x: UInt) = if (maskBits == 0) 0.U
+    else
+      Cat((maskFilter.zip(x.asBools)).filter(_._1).map(_._2).reverse)
 
     val findex = front.bits.index & maskMatch
     val bindex = back.bits.index & maskMatch
@@ -163,10 +183,13 @@ object RegMapper {
         oRightReg(index) = bindex === uint
       }
       // Confirm that no field spans a word boundary
-      fields foreach { case (bit, field) =>
+      fields.foreach { case (bit, field) =>
         val off = bit - 8 * bytes * word
         // println(s"Reg ${word}: [${off}, ${off+field.width})")
-        require(off + field.width <= bytes * 8, s"Field at word ${word}*(${bytes}B) has bits [${off}, ${off + field.width}), which exceeds word limit.")
+        require(
+          off + field.width <= bytes * 8,
+          s"Field at word ${word}*(${bytes}B) has bits [${off}, ${off + field.width}), which exceeds word limit."
+        )
       }
       // println("mapping 0x%x -> 0x%x for 0x%x/%d".format(word, index, mask, maskBits))
       fields.map { case (bit, field) => (index, bit - 8 * bytes * word, field) }
@@ -262,11 +285,15 @@ object RegMapper {
 
     // Compute: is the selected register ready? ... and cross-connect all ready-valids
     def mux(index: UInt, valid: Bool, select: Seq[Bool], guard: Seq[Bool], flow: Seq[Seq[(Bool, Bool)]]): Bool =
-      MuxSeq(index, true.B, ((select zip guard) zip flow).map { case ((s, g), f) =>
-        val out = Wire(Bool())
-        ReduceOthers((out, valid && s && g) +: f)
-        out || !g
-      })
+      MuxSeq(
+        index,
+        true.B,
+        ((select.zip(guard)).zip(flow)).map { case ((s, g), f) =>
+          val out = Wire(Bool())
+          ReduceOthers((out, valid && s && g) +: f)
+          out || !g
+        }
+      )
 
     // Include the per-register one-hot selected criteria
     val rifireMux = mux(iindex, in.valid && front.ready && front.bits.read, frontSel, iRightReg, rifire)
@@ -284,29 +311,26 @@ object RegMapper {
     out.valid := back.valid && oready
 
     out.bits.read := back.bits.read
-    out.bits.data := Mux(MuxSeq(oindex, true.B, oRightReg),
-      MuxSeq(oindex, 0.U, dataOut),
-      0.U)
+    out.bits.data := Mux(MuxSeq(oindex, true.B, oRightReg), MuxSeq(oindex, 0.U, dataOut), 0.U)
     out.bits.id := back.bits.id
 
     out
   }
 }
 
-
 object MuxSeq {
-  def apply[T <: Data : ClassTag](index: UInt, default: T, first: T, rest: T*): T =
+  def apply[T <: Data: ClassTag](index: UInt, default: T, first: T, rest: T*): T =
     apply(index, default, first :: rest.toList)
 
-  def apply[T <: Data : ClassTag](index: UInt, default: T, cases: Seq[T]): T =
+  def apply[T <: Data: ClassTag](index: UInt, default: T, cases: Seq[T]): T =
     MuxTable(index, default, cases.zipWithIndex.map { case (v, i) => (BigInt(i), v) })
 }
 
 object MuxTable {
-  def apply[T <: Data : ClassTag](index: UInt, default: T, first: (BigInt, T), rest: (BigInt, T)*): T =
+  def apply[T <: Data: ClassTag](index: UInt, default: T, first: (BigInt, T), rest: (BigInt, T)*): T =
     apply(index, default, first :: rest.toList)
 
-  def apply[T <: Data : ClassTag](index: UInt, default: T, cases: Seq[(BigInt, T)]): T = {
+  def apply[T <: Data: ClassTag](index: UInt, default: T, cases: Seq[(BigInt, T)]): T = {
     /* All keys must be >= 0 and distinct */
     cases.foreach { case (k, _) => require(k >= 0) }
     require(cases.map(_._1).distinct.size == cases.size)
@@ -374,23 +398,32 @@ object ReduceOthers {
 
   // Take pairs of (output_wire, input_bool)
   def apply(x: Seq[(Bool, Bool)]): Unit = {
-    (x.map(_._1) zip apply(x.map(_._2))) foreach { case (w, x) => w := x }
+    (x.map(_._1).zip(apply(x.map(_._2)))).foreach { case (w, x) => w := x }
   }
 
   private def helper(x: Seq[Bool]): (Seq[Bool], Bool) = {
     if (x.size <= 1) {
-      (Seq.fill(x.size) {
-        true.B
-      }, x.headOption.getOrElse(true.B))
+      (
+        Seq.fill(x.size) {
+          true.B
+        },
+        x.headOption.getOrElse(true.B)
+      )
     } else if (x.size <= 3) {
-      (Seq.tabulate(x.size) { i =>
-        (x.take(i) ++ x.drop(i + 1)).reduce(_ && _)
-      }, x.reduce(_ && _))
+      (
+        Seq.tabulate(x.size) { i =>
+          (x.take(i) ++ x.drop(i + 1)).reduce(_ && _)
+        },
+        x.reduce(_ && _)
+      )
     } else {
       val (half, all) = helper(x.grouped(2).map(_.reduce(_ && _)).toList)
-      (Seq.tabulate(x.size) { i =>
-        if ((i ^ 1) >= x.size) half(i / 2) else x(i ^ 1) && half(i / 2)
-      }, all)
+      (
+        Seq.tabulate(x.size) { i =>
+          if ((i ^ 1) >= x.size) half(i / 2) else x(i ^ 1) && half(i / 2)
+        },
+        all
+      )
     }
   }
 }
@@ -511,9 +544,10 @@ object AddressDecoder {
     // Prevent combinational memory explosion; if two partitions are equal, keep only one
     // Note: AddressSets in a port are sorted, and ports in a partition are sorted.
     // This makes it easy to structurally compare two partitions for equality
-    val keep = (new_partitions.init zip new_partitions.tail) filter { case (a, b) => partitionOrder.compare(a, b) != 0 } map {
-      _._2
-    }
+    val keep =
+      (new_partitions.init.zip(new_partitions.tail)).filter { case (a, b) => partitionOrder.compare(a, b) != 0 }.map {
+        _._2
+      }
     new_partitions.head +: keep
   }
 
@@ -521,7 +555,8 @@ object AddressDecoder {
   val debug = false
 
   def recurse(partitions: Partitions, bits: Seq[BigInt]): Seq[BigInt] = {
-    if (partitions.map(_.size <= 1).reduce(_ && _)) Seq() else {
+    if (partitions.map(_.size <= 1).reduce(_ && _)) Seq()
+    else {
       if (debug) {
         println("Partitioning:")
         partitions.foreach { partition =>
@@ -540,7 +575,8 @@ object AddressDecoder {
           println("  For bit %x, %s".format(bit, score.toString))
         (score, bit, result)
       }
-      val (bestScore, bestBit, bestPartitions) = candidates.min(Ordering.by[(Seq[Int], BigInt, Partitions), Iterable[Int]](_._1))
+      val (bestScore, bestBit, bestPartitions) =
+        candidates.min(Ordering.by[(Seq[Int], BigInt, Partitions), Iterable[Int]](_._1))
       if (debug) println("=> Selected bit 0x%x".format(bestBit))
       bestBit +: recurse(bestPartitions, bits.filter(_ != bestBit))
     }
@@ -571,7 +607,8 @@ object MaskGen {
       }
     }
 
-    if (groupBy == beatBytes) 1.U else
+    if (groupBy == beatBytes) 1.U
+    else
       Cat(helper(lgBytes - log2Ceil(groupBy)).map(_._1).reverse)
   }
 }

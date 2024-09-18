@@ -10,6 +10,11 @@ import chisel3.properties.{AnyClassType, Class, Property}
 import chisel3.util.circt.dpi.RawUnclockedNonVoidFunctionCall
 import chisel3.util.{Counter, HasExtModuleInline}
 
+object IOMMUTestBenchParameter {
+  implicit def rwP: upickle.default.ReadWriter[IOMMUTestBenchParameter] =
+    upickle.default.macroRW
+}
+
 /** Parameter of [[IOMMU]]. */
 case class IOMMUTestBenchParameter(
   testVerbatimParameter: TestVerbatimParameter,

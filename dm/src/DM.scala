@@ -54,8 +54,3 @@ class DM(val parameter: DMParameter)
   val omInstance: Instance[DMOM] = Instantiate(new DMOM(parameter))
   io.om := omInstance.getPropertyReference.asAnyClassType
 }
-
-object DMTestBenchParameter {
-  implicit def rwP: upickle.default.ReadWriter[DMTestBenchParameter] =
-    upickle.default.macroRW
-}
