@@ -21,9 +21,9 @@
 
 let
   self = stdenv.mkDerivation rec {
-    name = "gcd";
+    name = "aclint";
 
-    mainClass = "org.chipsalliance.gcd.elaborator.${target}Main";
+    mainClass = "org.chipsalliance.uncore.elaborator.${target}Main";
 
     src = with lib.fileset;
       toSource {
@@ -31,7 +31,8 @@ let
         fileset = unions [
           ./../../build.sc
           ./../../common.sc
-          ./../../gcd
+          ./../../aclint
+          ./../../regrouter
           ./../../elaborator
         ];
       };
@@ -75,10 +76,14 @@ let
       projectDependencies.setupHook
     ];
 
-    env.CIRCT_INSTALL_PATH = circt-full;
-    env.JEXTRACT_INSTALL_PATH = jextract-21;
+    env = {
+      CIRCT_INSTALL_PATH = circt-full;
+      JEXTRACT_INSTALL_PATH = jextract-21;
+    };
 
     outputs = [ "out" "elaborator" ];
+
+    meta.mainProgram = "elaborator";
 
     buildPhase = ''
       mill -i '__.assembly'

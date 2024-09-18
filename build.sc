@@ -31,13 +31,13 @@ object axi4 extends AXI4
 
 trait AXI4 extends millbuild.dependencies.`chisel-interface`.common.AXI4Module {
   override def millSourcePath = os.pwd / "dependencies" / "chisel-interface" / "axi4"
-  def scalaVersion            = v.scala
+  def scalaVersion = v.scala
 
   def mainargsIvy = v.mainargs
 
-  def chiselModule    = Some(chisel)
+  def chiselModule = Some(chisel)
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
-  def chiselIvy       = None
+  def chiselIvy = None
   def chiselPluginIvy = None
 }
 
@@ -56,18 +56,9 @@ object dwbb extends DWBB
 
 trait DWBB extends millbuild.dependencies.`chisel-interface`.common.DWBBModule {
   override def millSourcePath = os.pwd / "dependencies" / "chisel-interface" / "dwbb"
-  def scalaVersion            = v.scala
+  def scalaVersion = v.scala
 
   def mainargsIvy = v.mainargs
-
-  def chiselModule    = Some(chisel)
-  def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
-  def chiselIvy       = None
-  def chiselPluginIvy = None
-}
-
-object gcd extends millbuild.common.HasChisel with ScalafmtModule {
-  def scalaVersion = T(v.scala)
 
   def chiselModule = Some(chisel)
   def chiselPluginJar = T(Some(chisel.pluginModule.jar()))
@@ -166,7 +157,7 @@ trait IOMMU extends millbuild.common.IOMMUModule with ScalafmtModule {
 }
 
 object elaborator extends Elaborator
-trait Elaborator extends millbuild.common.ElaboratorModule {
+trait Elaborator extends millbuild.common.ElaboratorModule with ScalafmtModule {
   def scalaVersion = T(v.scala)
 
   def panamaconverterModule = panamaconverter
@@ -174,7 +165,7 @@ trait Elaborator extends millbuild.common.ElaboratorModule {
   def circtInstallPath =
     T.input(PathRef(os.Path(T.ctx().env("CIRCT_INSTALL_PATH"))))
 
-  def generators = Seq(gcd, aclint, plic, dm, clic, aia, iommu)
+  def generators = Seq(aclint, plic, dm, clic, aia, iommu)
 
   def mainargsIvy = v.mainargs
 

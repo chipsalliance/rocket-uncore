@@ -1,0 +1,36 @@
+name: Check the format of a PR
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - labeled
+env:
+  USER: runner
+
+# Cancel the current workflow when new commit pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  check-format:
+    name: "Check format"
+    runs-on: [self-hosted, linux, nixos]
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: "Check Scala format"
+        if: "!cancelled()"
+        run: |
+          nix develop '.#aclint.aclint-compiled' -c bash -c 'echo -e "aclint\nclic\ndm\niommu\nplic\nregrouter" | xargs -I {} mill -i {}.checkFormat'
+      - name: "Check nix format"
+        if: "!cancelled()"
+        run: |
+          nix fmt -- --check nix flake.nix

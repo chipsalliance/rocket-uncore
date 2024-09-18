@@ -54,8 +54,3 @@ class IOMMU(val parameter: IOMMUParameter)
   val omInstance: Instance[IOMMUOM] = Instantiate(new IOMMUOM(parameter))
   io.om := omInstance.getPropertyReference.asAnyClassType
 }
-
-object IOMMUTestBenchParameter {
-  implicit def rwP: upickle.default.ReadWriter[IOMMUTestBenchParameter] =
-    upickle.default.macroRW
-}
