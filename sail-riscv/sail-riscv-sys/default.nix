@@ -3,7 +3,7 @@
 , sail-riscv-c-model
 , rustfmt
 , rust-analyzer
-, llvmPackages_18
+, gmp
 }:
 
 let
@@ -23,6 +23,8 @@ let
     nativeBuildInputs = [
       rustPlatform.bindgenHook
     ];
+
+    buildInputs = [ gmp ];
 
     env = {
       SAIL_INSTALL_PATH = toString sail-riscv-c-model.sail;
