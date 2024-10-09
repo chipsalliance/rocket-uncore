@@ -40,8 +40,6 @@ extern "C" {
   fn ztick_platform(_: unit) -> unit;
 
   pub(crate) static mut zxlen_val: mach_bits;
-  pub(crate) static mut zhtif_done: bool;
-  pub(crate) static mut zhtif_exit_code: mach_bits;
   pub(crate) static mut have_exception: bool;
 
   /* machine state */
@@ -94,4 +92,23 @@ extern "C" {
   pub(crate) static mut zminstret: mach_bits;
 
   pub(crate) static mut zmisa: zMisa;
+}
+
+/// Initialize and setup internal register
+pub unsafe fn preinit_sail_model() {
+  // setup rts: initialize sail runtime
+  // setup regs
+  model_init();
+}
+
+pub unsafe fn finalize_sail_model() {
+  model_fini();
+}
+
+pub unsafe fn init_sail_riscv_model() {
+  zinit_model(UNIT.try_into().expect("Invalid UNIT value"));
+}
+
+pub unsafe fn sail_step() {
+  zstep()
 }

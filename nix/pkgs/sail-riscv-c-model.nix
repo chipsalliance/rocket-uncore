@@ -49,6 +49,7 @@ stdenv.mkDerivation (finalAttr: {
   '';
 
   sailArgs = [
+    "-c_specialize"
     "--strict-var"
     "-dno_cast"
     "-c_preserve"
