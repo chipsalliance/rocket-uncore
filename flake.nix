@@ -25,10 +25,10 @@
         formatter = pkgs.nixpkgs-fmt;
         legacyPackages = pkgs;
         devShells.default = pkgs.mkShell {
-          shellHook = ''
-            export CIRCT_INSTALL_PATH=${pkgs.circt-full};
-            export JEXTRACT_INSTALL_PATH=${pkgs.jextract-21};
-          '';
+          env = {
+            CIRCT_INSTALL_PATH = toString pkgs.circt-full;
+            JEXTRACT_INSTALL_PATH = toString pkgs.jextract-21;
+          };
           nativeBuildInputs = [ pkgs.cargo pkgs.rustfmt pkgs.rust-analyzer ];
           RUST_SRC_PATH =
             "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";

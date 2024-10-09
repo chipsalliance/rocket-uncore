@@ -25,4 +25,7 @@ final: prev: {
   projectDependencies = final.callPackage ./pkgs/project-dependencies.nix { };
 
   aclint = final.callPackage ./aclint { };
+
+  sail-riscv-c-model = final.callPackage ./pkgs/sail-riscv-c-model.nix { };
+  sail-emu = final.callPackage ../sail-riscv { };
 }
