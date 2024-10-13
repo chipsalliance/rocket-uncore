@@ -1,13 +1,29 @@
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2024 Jiuyang Liu <liu@jiuyang.me>
+// See LICENSE.SiFive for license details.
 
-package org.chipsalliance.uncore.dm
+package freechips.rocketchip.devices.debug
+
 
 import chisel3._
-import chisel3.experimental.hierarchy.{instantiable, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import chisel3.probe.{define, Probe, ProbeValue}
-import chisel3.properties.{AnyClassType, Class, Property}
+import chisel3.util._
+
+import org.chipsalliance.cde.config._
+import org.chipsalliance.diplomacy.lazymodule._
+
+import freechips.rocketchip.amba.apb.{APBFanout, APBToTL}
+import freechips.rocketchip.devices.debug.systembusaccess.{SBToTL, SystemBusAccessModule}
+import freechips.rocketchip.devices.tilelink.{DevNullParams, TLBusBypass, TLError}
+import freechips.rocketchip.diplomacy.{AddressSet, BufferParams}
+import freechips.rocketchip.resources.{Description, Device, Resource, ResourceBindings, ResourceString, SimpleDevice}
+import freechips.rocketchip.interrupts.{IntNexusNode, IntSinkParameters, IntSinkPortParameters, IntSourceParameters, IntSourcePortParameters, IntSyncCrossingSource, IntSyncIdentityNode}
+import freechips.rocketchip.regmapper.{RegField, RegFieldAccessType, RegFieldDesc, RegFieldGroup, RegFieldWrType, RegReadFn, RegWriteFn}
+import freechips.rocketchip.rocket.{CSRs, Instructions}
+import freechips.rocketchip.tile.MaxHartIdBits
+import freechips.rocketchip.tilelink.{TLAsyncCrossingSink, TLAsyncCrossingSource, TLBuffer, TLRegisterNode, TLXbar}
+import freechips.rocketchip.util.{Annotated, AsyncBundle, AsyncQueueParams, AsyncResetSynchronizerShiftReg, FromAsyncBundle, ParameterizedBundle, ResetSynchronizerShiftReg, ToAsyncBundle}
+
+import freechips.rocketchip.util.SeqBoolBitwiseOps
+import freechips.rocketchip.util.SeqToAugmentedSeq
+import freechips.rocketchip.util.BooleanToAugmentedBoolean
 
 object DsbBusConsts {
   def sbAddrWidth = 12
@@ -651,7 +667,6 @@ class TLDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMod
   omRegMap   // FIXME: Remove this when withReset is removed
   }}
 }
-
 // wrap a Outer with a DMIToTL, derived by dmi clock & reset
 class TLDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends LazyModule {
 
@@ -1910,46 +1925,12 @@ class TLDebugModuleInnerAsync(device: Device, getNComponents: () => Int, beatByt
   }
 }
 
-object DMParameter {
-  implicit def rwP: upickle.default.ReadWriter[DMParameter] =
-    upickle.default.macroRW
-}
+/** Create a version of the TLDebugModule which includes a synchronization interface
+  * internally for the DMI. This is no longer optional outside of this module
+  * because the Clock must run when tl_clock isn't running or tl_reset is asserted.
+  */
 
-/** Parameter of [[DM]] */
-case class DMParameter(useAsyncReset: Boolean) extends SerializableModuleParameter
-
-/** Verification IO of [[DM]] */
-class DMProbe(parameter: DMParameter) extends Bundle {}
-
-/** Metadata of [[DM]]. */
-@instantiable
-class DMOM(parameter: DMParameter) extends Class {
-  val useAsyncReset: Property[Boolean] = IO(Output(Property[Boolean]()))
-  useAsyncReset := Property(parameter.useAsyncReset)
-}
-
-/** Interface of [[DM]]. */
-class DMInterface(parameter: DMParameter) extends Bundle {
-  val clock = Input(Clock())
-  val reset = Input(if (parameter.useAsyncReset) AsyncReset() else Bool())
-  val probe = Output(Probe(new DMProbe(parameter), layers.Verification))
-  val om = Output(Property[AnyClassType]())
-}
-
-/** Hardware Implementation of DM */
-@instantiable
-class DM(val parameter: DMParameter)
-    extends FixedIORawModule(new DMInterface(parameter))
-    with SerializableModule[DMParameter]
-    with ImplicitClock
-    with ImplicitReset {
-  override protected def implicitClock: Clock = io.clock
-
-  override protected def implicitReset: Reset = io.reset
-
-  // Assign Probe
-  val probeWire: DMProbe = Wire(new DMProbe(parameter))
-  define(io.probe, ProbeValue(probeWire))
+class TLDebugModule(beatBytes: Int)(implicit p: Parameters) extends LazyModule {
 
   val device = new SimpleDevice("debug-controller", Seq("sifive,debug-013","riscv,debug-013")){
     override val alwaysExtended = true
@@ -1957,7 +1938,9 @@ class DM(val parameter: DMParameter)
       val Description(name, mapping) = super.describe(resources)
       val attach = Map(
         "debug-attach"     -> (
+          (if (p(ExportDebug).apb) Seq(ResourceString("apb")) else Seq()) ++
           (if (p(ExportDebug).jtag) Seq(ResourceString("jtag")) else Seq()) ++
+          (if (p(ExportDebug).cjtag) Seq(ResourceString("cjtag")) else Seq()) ++
           (if (p(ExportDebug).dmi) Seq(ResourceString("dmi")) else Seq())))
       Description(name, mapping ++ attach)
     }
@@ -2043,8 +2026,4 @@ class DM(val parameter: DMParameter)
     io.auth.foreach { x => dmOuter.module.io.dmAuthenticated.get := x.dmAuthenticated }
     io.auth.foreach { x => dmInner.module.io.auth.foreach {y => x <> y}}
   }
-  
-  // Assign Metadata
-  val omInstance: Instance[DMOM] = Instantiate(new DMOM(parameter))
-  io.om := omInstance.getPropertyReference.asAnyClassType
 }
