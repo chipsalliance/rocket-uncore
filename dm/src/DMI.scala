@@ -60,7 +60,7 @@ class DMIResp( ) extends Bundle {
   *  Therefore it has the 'flipped' version of this.
   */
 class DMIIO(implicit val p: Parameters) extends ParameterizedBundle()(p) {
-  val req = new  DecoupledIO(new DMIReq(p(DebugModuleKey).get.nDMIAddrSize))
+  val req = new DecoupledIO(new DMIReq(p(DebugModuleKey).get.nDMIAddrSize))
   val resp = Flipped(new DecoupledIO(new DMIResp))
 }
 

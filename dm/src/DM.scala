@@ -9,6 +9,25 @@ import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 import chisel3.probe.{define, Probe, ProbeValue}
 import chisel3.properties.{AnyClassType, Class, Property}
 
+import org.chipsalliance.amba.RegMapper.regmap
+import org.chipsalliance.amba.RegFieldGroup
+
+import freechips.rocketchip.amba.apb.{APBFanout, APBToTL}
+import freechips.rocketchip.devices.debug.systembusaccess.{SBToTL, SystemBusAccessModule}
+import freechips.rocketchip.devices.tilelink.{DevNullParams, TLBusBypass, TLError}
+import freechips.rocketchip.diplomacy.{AddressSet, BufferParams}
+import freechips.rocketchip.resources.{Description, Device, Resource, ResourceBindings, ResourceString, SimpleDevice}
+import freechips.rocketchip.interrupts.{IntNexusNode, IntSinkParameters, IntSinkPortParameters, IntSourceParameters, IntSourcePortParameters, IntSyncCrossingSource, IntSyncIdentityNode}
+import freechips.rocketchip.regmapper.{RegField, RegFieldAccessType, RegFieldDes, , RegFieldWrType, RegReadFn, RegWriteFn}
+import freechips.rocketchip.rocket.{CSRs, Instructions}
+import freechips.rocketchip.tile.MaxHartIdBits
+import freechips.rocketchip.tilelink.{TLAsyncCrossingSink, TLAsyncCrossingSource, TLBuffer, TLRegisterNode, TLXbar}
+import freechips.rocketchip.util.{Annotated, AsyncBundle, AsyncQueueParams, AsyncResetSynchronizerShiftReg, FromAsyncBundle, ParameterizedBundle, ResetSynchronizerShiftReg, ToAsyncBundle}
+
+import freechips.rocketchip.util.SeqBoolBitwiseOps
+import freechips.rocketchip.util.SeqToAugmentedSeq
+import freechips.rocketchip.util.BooleanToAugmentedBoolean
+
 object DsbBusConsts {
   def sbAddrWidth = 12
   def sbIdWidth   = 10
@@ -298,7 +317,7 @@ object WNotifyVal {
   }
 }
 
-class TLDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyModule {
+class AXIDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyModule {
 
   // For Shorter Register Names
   import DMI_RegAddrs._
@@ -310,15 +329,16 @@ class TLDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMod
     sinkFn         = { _ => IntSinkPortParameters(Seq(IntSinkParameters())) },
     outputRequiresInput = false)
 
-  val dmiNode = TLRegisterNode (
-    address = AddressSet.misaligned(DMI_DMCONTROL   << 2, 4) ++
-              AddressSet.misaligned(DMI_HARTINFO    << 2, 4) ++
-              AddressSet.misaligned(DMI_HAWINDOWSEL << 2, 4) ++
-              AddressSet.misaligned(DMI_HAWINDOW    << 2, 4),
-    device = device,
-    beatBytes = 4,
-    executable = false
-  )
+  // val dmiNode = TLRegisterNode(
+  //   address = AddressSet.misaligned(DMI_DMCONTROL   << 2, 4) ++
+  //             AddressSet.misaligned(DMI_HARTINFO    << 2, 4) ++
+  //             AddressSet.misaligned(DMI_HAWINDOWSEL << 2, 4) ++
+  //             AddressSet.misaligned(DMI_HAWINDOW    << 2, 4),
+  //   device = device,
+  //   beatBytes = 4,
+  //   executable = false
+  // )
+  val dmiNode = Flipped(axi4.bundle.verilog.irrevocable(parameter.axi4parameter)).asInstanceOf[AXI4RWIrrevocableVerilog]
 
   lazy val module = new Impl
   class Impl extends LazyModuleImp(this) {
@@ -350,8 +370,9 @@ class TLDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMod
     val omRegMap = withReset(reset.asAsyncReset) {
     // FIXME: Instead of casting reset to ensure it is Async, assert/require reset.Type == AsyncReset (when this feature is available)
 
-    val dmAuthenticated = io.dmAuthenticated.map( dma =>
-      ResetSynchronizerShiftReg(in=dma, sync=3, name=Some("dmAuthenticated_sync"))).getOrElse(true.B)
+    // val dmAuthenticated = io.dmAuthenticated.map( dma =>
+      // ResetSynchronizerShiftReg(in=dma, sync=3, name=Some("dmAuthenticated_sync"))).getOrElse(true.B)
+    val dmAuthenticated = io.dmAuthenticated
 
     //----DMCONTROL (The whole point of 'Outer' is to maintain this register on dmiClock (e.g. TCK) domain, so that it
     //               can be written even if 'Inner' is not being clocked or is in reset. This allows halting
@@ -653,41 +674,25 @@ class TLDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMod
 }
 
 // wrap a Outer with a DMIToTL, derived by dmi clock & reset
-class TLDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends LazyModule {
+class AXIDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends LazyModule {
 
   val cfg = p(DebugModuleKey).get
 
-  val dmiXbar = LazyModule (new TLXbar(nameSuffix = Some("dmixbar")))
+  // val dmiXbar = LazyModule (new TLXbar(nameSuffix = Some("dmixbar")))
+  // val dmi2tlOpt = (!p(ExportDebug).apb).option({
+  //   val dmi2tl = LazyModule(new DMIToTL())
+  //   dmiXbar.node := dmi2tl.node
+  //   dmi2tl
+  // })
+  val dmi2AXI = (!p(ExportDebug).apb).option(Flipped(new DMIIO()(p)))
 
-  val dmi2tlOpt = (!p(ExportDebug).apb).option({
-    val dmi2tl = LazyModule(new DMIToTL())
-    dmiXbar.node := dmi2tl.node
-    dmi2tl
-  })
-
-  val apbNodeOpt = p(ExportDebug).apb.option({
-    val apb2tl = LazyModule(new APBToTL())
-    val apb2tlBuffer = LazyModule(new TLBuffer(BufferParams.pipe))
-    val dmTopAddr = (1 << cfg.nDMIAddrSize) << 2
-    val tlErrorParams = DevNullParams(AddressSet.misaligned(dmTopAddr, APBDebugConsts.apbDebugRegBase-dmTopAddr), maxAtomic=0, maxTransfer=4)
-    val tlError  = LazyModule(new TLError(tlErrorParams, buffer=false))
-    val apbXbar  = LazyModule(new APBFanout())
-    val apbRegs  = LazyModule(new APBDebugRegisters())
-
-    apbRegs.node := apbXbar.node
-    apb2tl.node  := apbXbar.node
-    apb2tlBuffer.node := apb2tl.node
-    dmiXbar.node := apb2tlBuffer.node
-    tlError.node := dmiXbar.node
-    apbXbar.node
-  })
-
-  val dmOuter = LazyModule( new TLDebugModuleOuter(device))
+  val dmOuter = LazyModule(new AXIDebugModuleOuter(device))
   val intnode = IntSyncIdentityNode()
   intnode :*= IntSyncCrossingSource(alreadyRegistered = true) :*= dmOuter.intnode
 
-  val dmiBypass = LazyModule(new TLBusBypass(beatBytes=4, bufferError=false, maxAtomic=0, maxTransfer=4))
-  val dmiInnerNode = TLAsyncCrossingSource() := dmiBypass.node := dmiXbar.node
+  // val dmiBypass = LazyModule(new TLBusBypass(beatBytes=4, bufferError=false, maxAtomic=0, maxTransfer=4))
+  // val dmiInnerNode = TLAsyncCrossingSource() := dmiBypass.node := dmiXbar.node
+  val dmiInnerNode = TLAsyncCrossingSource()  
   dmOuter.dmiNode := dmiXbar.node
   
   lazy val module = new Impl
@@ -721,7 +726,8 @@ class TLDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends La
     override def provideImplicitClockToLazyChildren = true
 
     withClockAndReset(childClock, childReset) {
-      dmi2tlOpt.foreach { _.module.io.dmi <> io.dmi.get }
+      // dmi2tlOpt.foreach { _.module.io.dmi <> io.dmi.get }
+      dmi2AXI.foreach { _ <> io.dmi.get }
 
       val dmactiveAck = AsyncResetSynchronizerShiftReg(in=io.ctrl.dmactiveAck, sync=3, name=Some("dmactiveAckSync"))
       dmiBypass.module.io.bypass := ~io.ctrl.dmactive | ~dmactiveAck
@@ -736,7 +742,7 @@ class TLDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends La
   }
 }
 
-class TLDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule
+class AXIDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule
 {
 
   // For Shorter Register Names
@@ -1836,10 +1842,10 @@ class TLDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: I
 // Handles the synchronization of dmactive, which is used as a synchronous reset
 // inside the Inner block.
 // Also is the Sink side of hartsel & resumereq fields of DMCONTROL.
-class TLDebugModuleInnerAsync(device: Device, getNComponents: () => Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule{
+class AXIDebugModuleInnerAsync(device: Device, getNComponents: () => Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule{
 
   val cfg = p(DebugModuleKey).get
-  val dmInner = LazyModule(new TLDebugModuleInner(device, getNComponents, beatBytes))
+  val dmInner = LazyModule(new AXIDebugModuleInner(device, getNComponents, beatBytes))
   val dmiXing = LazyModule(new TLAsyncCrossingSink(AsyncQueueParams.singleton(safe=cfg.crossingHasSafeReset)))
   val dmiNode = dmiXing.node
   val tlNode = dmInner.tlNode
@@ -1963,12 +1969,12 @@ class DM(val parameter: DMParameter)
     }
   }
 
-  val dmOuter : TLDebugModuleOuterAsync = LazyModule(new TLDebugModuleOuterAsync(device)(p))
-  val dmInner : TLDebugModuleInnerAsync = LazyModule(new TLDebugModuleInnerAsync(device, () => {dmOuter.dmOuter.intnode.edges.out.size}, beatBytes)(p))
+  val dmOuter : AXIDebugModuleOuterAsync = LazyModule(new AXIDebugModuleOuterAsync(device)(p))
+  val dmInner : AXIDebugModuleInnerAsync = LazyModule(new AXIDebugModuleInnerAsync(device, () => {dmOuter.dmOuter.intnode.edges.out.size}, beatBytes)(p))
 
   val node = dmInner.tlNode
   val intnode = dmOuter.intnode
-  val apbNodeOpt = dmOuter.apbNodeOpt
+  // val apbNodeOpt = dmOuter.apbNodeOpt
 
   dmInner.dmiNode := dmOuter.dmiInnerNode
 
@@ -1995,8 +2001,8 @@ class DM(val parameter: DMParameter)
         * The DTM provides access to one or more Debug Modules (DMs) using DMI
         */
       val dmi = (!p(ExportDebug).apb).option(Flipped(new ClockedDMIIO()))
-      val apb_clock = p(ExportDebug).apb.option(Input(Clock()))
-      val apb_reset = p(ExportDebug).apb.option(Input(Reset()))
+      // val apb_clock = p(ExportDebug).apb.option(Input(Clock()))
+      // val apb_reset = p(ExportDebug).apb.option(Input(Reset()))
       val extTrigger = (p(DebugModuleKey).get.nExtTriggers > 0).option(new DebugExtTriggerIO())
       /** vector to indicate which hart is in reset
         *
@@ -2020,11 +2026,11 @@ class DM(val parameter: DMParameter)
       dmOuter.module.rf_reset := io.dmi.get.dmiReset
     }
 
-    (io.apb_clock zip io.apb_reset)  foreach { case (c, r) =>
-      dmOuter.module.io.dmi_reset := r
-      dmOuter.module.io.dmi_clock := c
-      dmOuter.module.rf_reset := r
-    }
+    // (io.apb_clock zip io.apb_reset)  foreach { case (c, r) =>
+    //   dmOuter.module.io.dmi_reset := r
+    //   dmOuter.module.io.dmi_clock := c
+    //   dmOuter.module.rf_reset := r
+    // }
 
     dmInner.module.rf_reset := io.debug_reset
     dmInner.module.io.debug_clock := io.debug_clock
