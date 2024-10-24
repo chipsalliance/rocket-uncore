@@ -586,15 +586,21 @@ class AXIDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMo
     def DMI_HAWINDOWSEL_OFFSET = ((DMI_HAWINDOWSEL - DMI_DMCONTROL) << 2)
     def DMI_HAWINDOW_OFFSET    = ((DMI_HAWINDOW - DMI_DMCONTROL) << 2)
 
-    val omRegMap = dmiNode.regmap(
-      DMI_DMCONTROL_OFFSET   -> dmControlRegFields,
-      DMI_HARTINFO_OFFSET    -> hartinfoRegFields,
-      DMI_HAWINDOWSEL_OFFSET -> (if (supportHartArray && (nComponents > 32)) Seq(
-        WNotifyVal(log2Up(nComponents)-5, HAWINDOWSELReg.hawindowsel, HAWINDOWSELWrData.hawindowsel, HAWINDOWSELWrEn,
-        RegFieldDesc("hawindowsel", "hart array window select", reset=Some(0)))) else Nil),
-      DMI_HAWINDOW_OFFSET    -> (if (supportHartArray) Seq(
-        WNotifyVal(if (nComponents > 31) 32 else nComponents, HAWINDOWRdData.maskdata, HAWINDOWWrData.maskdata, HAWINDOWWrEn,
-        RegFieldDesc("hawindow", "hart array window", reset=Some(0), volatile=(nComponents > 32)))) else Nil)
+    // val omRegMap = dmiNode.regmap(
+    regmap(
+      dmiNode.viewAs[AXI4RWIrrevocable],
+      0,
+      false,
+      map(
+        DMI_DMCONTROL_OFFSET   -> dmControlRegFields,
+        DMI_HARTINFO_OFFSET    -> hartinfoRegFields,
+        DMI_HAWINDOWSEL_OFFSET -> (if (supportHartArray && (nComponents > 32)) Seq(
+          WNotifyVal(log2Up(nComponents)-5, HAWINDOWSELReg.hawindowsel, HAWINDOWSELWrData.hawindowsel, HAWINDOWSELWrEn,
+          RegFieldDesc("hawindowsel", "hart array window select", reset=Some(0)))) else Nil),
+        DMI_HAWINDOW_OFFSET    -> (if (supportHartArray) Seq(
+          WNotifyVal(if (nComponents > 31) 32 else nComponents, HAWINDOWRdData.maskdata, HAWINDOWWrData.maskdata, HAWINDOWWrEn,
+          RegFieldDesc("hawindow", "hart array window", reset=Some(0), volatile=(nComponents > 32)))) else Nil)
+      )
     )
 
     //--------------------------------------------------------------
@@ -669,7 +675,7 @@ class AXIDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMo
         io.hartResetReq.get(component) := hartResetReg(component)
       }
     }
-  omRegMap   // FIXME: Remove this when withReset is removed
+  // omRegMap   // FIXME: Remove this when withReset is removed
   }}
 }
 
@@ -684,6 +690,7 @@ class AXIDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends L
   //   dmiXbar.node := dmi2tl.node
   //   dmi2tl
   // })
+  val dmiNode = Flipped(axi4.bundle.verilog.irrevocable(parameter.axi4parameter)).asInstanceOf[AXI4RWIrrevocableVerilog]
   val dmi2AXI = (!p(ExportDebug).apb).option(Flipped(new DMIIO()(p)))
 
   val dmOuter = LazyModule(new AXIDebugModuleOuter(device))
@@ -692,7 +699,7 @@ class AXIDebugModuleOuterAsync(device: Device)(implicit p: Parameters) extends L
 
   // val dmiBypass = LazyModule(new TLBusBypass(beatBytes=4, bufferError=false, maxAtomic=0, maxTransfer=4))
   // val dmiInnerNode = TLAsyncCrossingSource() := dmiBypass.node := dmiXbar.node
-  val dmiInnerNode = TLAsyncCrossingSource()  
+  val dmiInnerNode = TLAsyncCrossingSource() := dmiXbar.node // TODO
   dmOuter.dmiNode := dmiXbar.node
   
   lazy val module = new Impl
@@ -752,23 +759,25 @@ class AXIDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: 
   def getCfg = () => cfg
   val dmTopAddr = (1 << cfg.nDMIAddrSize) << 2
   /** dmiNode address set */
-  val dmiNode = TLRegisterNode(
-       // Address is range 0 to 0x1FF except DMCONTROL, HARTINFO, HAWINDOWSEL, HAWINDOW which are handled by Outer
-    address = AddressSet.misaligned(0, DMI_DMCONTROL << 2) ++
-              AddressSet.misaligned((DMI_DMCONTROL + 1) << 2, ((DMI_HARTINFO << 2) - ((DMI_DMCONTROL + 1) << 2))) ++
-              AddressSet.misaligned((DMI_HARTINFO + 1) << 2, ((DMI_HAWINDOWSEL << 2) - ((DMI_HARTINFO + 1) << 2))) ++
-              AddressSet.misaligned((DMI_HAWINDOW + 1) << 2, (dmTopAddr - ((DMI_HAWINDOW + 1) << 2))),
-    device = device,
-    beatBytes = 4,
-    executable = false
-  )
+  // val dmiNode = TLRegisterNode(
+  //      // Address is range 0 to 0x1FF except DMCONTROL, HARTINFO, HAWINDOWSEL, HAWINDOW which are handled by Outer
+  //   address = AddressSet.misaligned(0, DMI_DMCONTROL << 2) ++
+  //             AddressSet.misaligned((DMI_DMCONTROL + 1) << 2, ((DMI_HARTINFO << 2) - ((DMI_DMCONTROL + 1) << 2))) ++
+  //             AddressSet.misaligned((DMI_HARTINFO + 1) << 2, ((DMI_HAWINDOWSEL << 2) - ((DMI_HARTINFO + 1) << 2))) ++
+  //             AddressSet.misaligned((DMI_HAWINDOW + 1) << 2, (dmTopAddr - ((DMI_HAWINDOW + 1) << 2))),
+  //   device = device,
+  //   beatBytes = 4,
+  //   executable = false
+  // )
+  val dmiNode = Flipped(axi4.bundle.verilog.irrevocable(parameter.axi4parameter)).asInstanceOf[AXI4RWIrrevocableVerilog]
 
-  val tlNode = TLRegisterNode(
-    address=Seq(cfg.address),
-    device=device,
-    beatBytes=beatBytes,
-    executable=true
-  )
+  // val tlNode = TLRegisterNode(
+  //   address=Seq(cfg.address),
+  //   device=device,
+  //   beatBytes=beatBytes,
+  //   executable=true
+  // )
+  val tlNode = Flipped(axi4.bundle.verilog.irrevocable(parameter.axi4parameter)).asInstanceOf[AXI4RWIrrevocableVerilog]
 
   val sb2tlOpt = cfg.hasBusMaster.option(LazyModule(new SBToTL()))
 
@@ -1407,46 +1416,52 @@ class AXIDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: 
     // Program Buffer Access (DMI ... System Bus can override)
     //--------------------------------------------------------------
 
-    val omRegMap = dmiNode.regmap(
-      (DMI_DMSTATUS    << 2) -> dmstatusRegFields,
-      //TODO (DMI_CFGSTRADDR0 << 2) -> cfgStrAddrFields,
-      (DMI_DMCS2       << 2) -> (if (nHaltGroups > 0) dmcs2RegFields else Nil),
-      (DMI_HALTSUM0    << 2) -> RegFieldGroup("dmi_haltsum0", Some("Halt Summary 0"),
-         Seq(RegField.r(32, HALTSUM0RdData.asUInt, RegFieldDesc("dmi_haltsum0", "halt summary 0")))),
-      (DMI_HALTSUM1    << 2) -> RegFieldGroup("dmi_haltsum1", Some("Halt Summary 1"),
-         Seq(RegField.r(32, HALTSUM1RdData.asUInt, RegFieldDesc("dmi_haltsum1", "halt summary 1")))),
-      (DMI_ABSTRACTCS  << 2) -> abstractcsRegFields,
-      (DMI_ABSTRACTAUTO<< 2) -> RegFieldGroup("dmi_abstractauto", Some("abstract command autoexec"), Seq(
-        WNotifyVal(cfg.nAbstractDataWords, ABSTRACTAUTORdData.autoexecdata, ABSTRACTAUTOWrData.autoexecdata, autoexecdataWrEnMaybe,
-          RegFieldDesc("autoexecdata", "abstract command data autoexec", reset=Some(0))),
-        RegField(16-cfg.nAbstractDataWords),
-        WNotifyVal(cfg.nProgramBufferWords, ABSTRACTAUTORdData.autoexecprogbuf, ABSTRACTAUTOWrData.autoexecprogbuf, autoexecprogbufWrEnMaybe,
-          RegFieldDesc("autoexecprogbuf", "abstract command progbuf autoexec", reset=Some(0))))),
-      (DMI_COMMAND     << 2) -> RegFieldGroup("dmi_command", Some("Abstract Command Register"),
-        Seq(RWNotify(32, COMMANDRdData.asUInt, COMMANDWrDataVal, COMMANDRdEn, COMMANDWrEnMaybe,
-        Some(RegFieldDesc("dmi_command", "abstract command register", reset=Some(0), volatile=true))))),
-      (DMI_DATA0       << 2) -> RegFieldGroup("dmi_data", Some("abstract command data registers"), abstractDataMem.zipWithIndex.map{case (x, i) =>
-        RWNotify(8, Mux(dmAuthenticated, x, 0.U), abstractDataNxt(i),
-        dmiAbstractDataRdEn(i),
-        dmiAbstractDataWrEnMaybe(i),
-        Some(RegFieldDesc(s"dmi_data_$i", s"abstract command data register $i", reset = Some(0), volatile=true)))}, false),
-      (DMI_PROGBUF0    << 2) -> RegFieldGroup("dmi_progbuf", Some("abstract command progbuf registers"), programBufferMem.zipWithIndex.map{case (x, i) =>
-        RWNotify(8, Mux(dmAuthenticated, x, 0.U), programBufferNxt(i),
-        dmiProgramBufferRdEn(i),
-        dmiProgramBufferWrEnMaybe(i),
-        Some(RegFieldDesc(s"dmi_progbuf_$i", s"abstract command progbuf register $i", reset = Some(0))))}, false),
-      (DMI_AUTHDATA   << 2) -> (if (cfg.hasAuthentication) RegFieldGroup("dmi_authdata", Some("authentication data exchange register"),
-        Seq(RWNotify(32, io.auth.get.dmAuthRdata, io.auth.get.dmAuthWdata, authRdEnMaybe, authWrEnMaybe,
-        Some(RegFieldDesc("authdata", "authentication data exchange", volatile=true))))) else Nil),
-      (DMI_SBCS       << 2) -> sbcsFields,
-      (DMI_SBDATA0    << 2) -> sbDataFields(0),
-      (DMI_SBDATA1    << 2) -> sbDataFields(1),
-      (DMI_SBDATA2    << 2) -> sbDataFields(2),
-      (DMI_SBDATA3    << 2) -> sbDataFields(3),
-      (DMI_SBADDRESS0 << 2) -> sbAddrFields(0),
-      (DMI_SBADDRESS1 << 2) -> sbAddrFields(1),
-      (DMI_SBADDRESS2 << 2) -> sbAddrFields(2),
-      (DMI_SBADDRESS3 << 2) -> sbAddrFields(3) 
+    // val omRegMap = dmiNode.regmap(
+    regmap(
+      dmiNode.viewAs[AXI4RWIrrevocable],
+      0,
+      false,
+      map(
+        (DMI_DMSTATUS    << 2) -> dmstatusRegFields,
+        //TODO (DMI_CFGSTRADDR0 << 2) -> cfgStrAddrFields,
+        (DMI_DMCS2       << 2) -> (if (nHaltGroups > 0) dmcs2RegFields else Nil),
+        (DMI_HALTSUM0    << 2) -> RegFieldGroup("dmi_haltsum0", Some("Halt Summary 0"),
+           Seq(RegField.r(32, HALTSUM0RdData.asUInt, RegFieldDesc("dmi_haltsum0", "halt summary 0")))),
+        (DMI_HALTSUM1    << 2) -> RegFieldGroup("dmi_haltsum1", Some("Halt Summary 1"),
+           Seq(RegField.r(32, HALTSUM1RdData.asUInt, RegFieldDesc("dmi_haltsum1", "halt summary 1")))),
+        (DMI_ABSTRACTCS  << 2) -> abstractcsRegFields,
+        (DMI_ABSTRACTAUTO<< 2) -> RegFieldGroup("dmi_abstractauto", Some("abstract command autoexec"), Seq(
+          WNotifyVal(cfg.nAbstractDataWords, ABSTRACTAUTORdData.autoexecdata, ABSTRACTAUTOWrData.autoexecdata, autoexecdataWrEnMaybe,
+            RegFieldDesc("autoexecdata", "abstract command data autoexec", reset=Some(0))),
+          RegField(16-cfg.nAbstractDataWords),
+          WNotifyVal(cfg.nProgramBufferWords, ABSTRACTAUTORdData.autoexecprogbuf, ABSTRACTAUTOWrData.autoexecprogbuf, autoexecprogbufWrEnMaybe,
+            RegFieldDesc("autoexecprogbuf", "abstract command progbuf autoexec", reset=Some(0))))),
+        (DMI_COMMAND     << 2) -> RegFieldGroup("dmi_command", Some("Abstract Command Register"),
+          Seq(RWNotify(32, COMMANDRdData.asUInt, COMMANDWrDataVal, COMMANDRdEn, COMMANDWrEnMaybe,
+          Some(RegFieldDesc("dmi_command", "abstract command register", reset=Some(0), volatile=true))))),
+        (DMI_DATA0       << 2) -> RegFieldGroup("dmi_data", Some("abstract command data registers"), abstractDataMem.zipWithIndex.map{case (x, i) =>
+          RWNotify(8, Mux(dmAuthenticated, x, 0.U), abstractDataNxt(i),
+          dmiAbstractDataRdEn(i),
+          dmiAbstractDataWrEnMaybe(i),
+          Some(RegFieldDesc(s"dmi_data_$i", s"abstract command data register $i", reset = Some(0), volatile=true)))}, false),
+        (DMI_PROGBUF0    << 2) -> RegFieldGroup("dmi_progbuf", Some("abstract command progbuf registers"), programBufferMem.zipWithIndex.map{case (x, i) =>
+          RWNotify(8, Mux(dmAuthenticated, x, 0.U), programBufferNxt(i),
+          dmiProgramBufferRdEn(i),
+          dmiProgramBufferWrEnMaybe(i),
+          Some(RegFieldDesc(s"dmi_progbuf_$i", s"abstract command progbuf register $i", reset = Some(0))))}, false),
+        (DMI_AUTHDATA   << 2) -> (if (cfg.hasAuthentication) RegFieldGroup("dmi_authdata", Some("authentication data exchange register"),
+          Seq(RWNotify(32, io.auth.get.dmAuthRdata, io.auth.get.dmAuthWdata, authRdEnMaybe, authWrEnMaybe,
+          Some(RegFieldDesc("authdata", "authentication data exchange", volatile=true))))) else Nil),
+        (DMI_SBCS       << 2) -> sbcsFields,
+        (DMI_SBDATA0    << 2) -> sbDataFields(0),
+        (DMI_SBDATA1    << 2) -> sbDataFields(1),
+        (DMI_SBDATA2    << 2) -> sbDataFields(2),
+        (DMI_SBDATA3    << 2) -> sbDataFields(3),
+        (DMI_SBADDRESS0 << 2) -> sbAddrFields(0),
+        (DMI_SBADDRESS1 << 2) -> sbAddrFields(1),
+        (DMI_SBADDRESS2 << 2) -> sbAddrFields(2),
+        (DMI_SBADDRESS3 << 2) -> sbAddrFields(3) 
+      )
     )
 
     // Abstract data mem is written by both the tile link interface and DMI...
@@ -1667,36 +1682,42 @@ class AXIDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: 
     // Hart Bus Access
     //--------------------------------------------------------------
 
-    tlNode.regmap(
-      // This memory is writable.
-      HALTED      -> Seq(WNotifyWire(sbIdWidth, hartHaltedId, hartHaltedWrEn,
-        "debug_hart_halted", "Debug ROM Causes hart to write its hartID here when it is in Debug Mode.")),
-      GOING       -> Seq(WNotifyWire(sbIdWidth, hartGoingId,  hartGoingWrEn,
-        "debug_hart_going", "Debug ROM causes hart to write 0 here when it begins executing Debug Mode instructions.")),
-      RESUMING    -> Seq(WNotifyWire(sbIdWidth, hartResumingId,  hartResumingWrEn,
-        "debug_hart_resuming", "Debug ROM causes hart to write its hartID here when it leaves Debug Mode.")),
-      EXCEPTION   -> Seq(WNotifyWire(sbIdWidth, hartExceptionId,  hartExceptionWrEn,
-        "debug_hart_exception", "Debug ROM causes hart to write 0 here if it gets an exception in Debug Mode.")),
-      DATA        -> RegFieldGroup("debug_data", Some("Data used to communicate with Debug Module"),
-        abstractDataMem.zipWithIndex.map {case (x, i) => RegField(8, x, RegFieldDesc(s"debug_data_$i", ""))}),
-      PROGBUF(cfg)-> RegFieldGroup("debug_progbuf", Some("Program buffer used to communicate with Debug Module"),
-        programBufferMem.zipWithIndex.map {case (x, i) => RegField(8, x, RegFieldDesc(s"debug_progbuf_$i", ""))}),
+    // tlNode.regmap(
+    regmap(
+      tlNode.viewAs[AXI4RWIrrevocable],
+      0,
+      false,
+      map(
+        // This memory is writable.
+        HALTED      -> Seq(WNotifyWire(sbIdWidth, hartHaltedId, hartHaltedWrEn,
+          "debug_hart_halted", "Debug ROM Causes hart to write its hartID here when it is in Debug Mode.")),
+        GOING       -> Seq(WNotifyWire(sbIdWidth, hartGoingId,  hartGoingWrEn,
+          "debug_hart_going", "Debug ROM causes hart to write 0 here when it begins executing Debug Mode instructions.")),
+        RESUMING    -> Seq(WNotifyWire(sbIdWidth, hartResumingId,  hartResumingWrEn,
+          "debug_hart_resuming", "Debug ROM causes hart to write its hartID here when it leaves Debug Mode.")),
+        EXCEPTION   -> Seq(WNotifyWire(sbIdWidth, hartExceptionId,  hartExceptionWrEn,
+          "debug_hart_exception", "Debug ROM causes hart to write 0 here if it gets an exception in Debug Mode.")),
+        DATA        -> RegFieldGroup("debug_data", Some("Data used to communicate with Debug Module"),
+          abstractDataMem.zipWithIndex.map {case (x, i) => RegField(8, x, RegFieldDesc(s"debug_data_$i", ""))}),
+        PROGBUF(cfg)-> RegFieldGroup("debug_progbuf", Some("Program buffer used to communicate with Debug Module"),
+          programBufferMem.zipWithIndex.map {case (x, i) => RegField(8, x, RegFieldDesc(s"debug_progbuf_$i", ""))}),
 
-      // These sections are read-only.
-      IMPEBREAK(cfg)-> {if (cfg.hasImplicitEbreak) Seq(RegField.r(32,  Instructions.EBREAK.value.U,
-        RegFieldDesc("debug_impebreak", "Debug Implicit EBREAK", reset=Some(Instructions.EBREAK.value)))) else Nil},
-      WHERETO       -> Seq(RegField.r(32, jalAbstract.asUInt, RegFieldDesc("debug_whereto", "Instruction filled in by Debug Module to control hart in Debug Mode", volatile = true))),
-      ABSTRACT(cfg) -> RegFieldGroup("debug_abstract", Some("Instructions generated by Debug Module"),
-        abstractGeneratedMem.zipWithIndex.map{ case (x,i) => RegField.r(32, x, RegFieldDesc(s"debug_abstract_$i", "", volatile=true))}),
-      FLAGS         -> RegFieldGroup("debug_flags", Some("Memory region used to control hart going/resuming in Debug Mode"),
-        if (nComponents == 1) {
-          Seq.tabulate(1024) { i => RegField.r(8, flags(0).asUInt, RegFieldDesc(s"debug_flags_$i", "", volatile=true)) }
-        } else {
-          flags.zipWithIndex.map{case(x, i) => RegField.r(8, x.asUInt, RegFieldDesc(s"debug_flags_$i", "", volatile=true))}
-        }),
-      ROMBASE       -> RegFieldGroup("debug_rom", Some("Debug ROM"),
-        (if (cfg.atzero) DebugRomContents() else DebugRomNonzeroContents()).zipWithIndex.map{case (x, i) =>
-          RegField.r(8, (x & 0xFF).U(8.W), RegFieldDesc(s"debug_rom_$i", "", reset=Some(x)))})
+        // These sections are read-only.
+        IMPEBREAK(cfg)-> {if (cfg.hasImplicitEbreak) Seq(RegField.r(32,  Instructions.EBREAK.value.U,
+          RegFieldDesc("debug_impebreak", "Debug Implicit EBREAK", reset=Some(Instructions.EBREAK.value)))) else Nil},
+        WHERETO       -> Seq(RegField.r(32, jalAbstract.asUInt, RegFieldDesc("debug_whereto", "Instruction filled in by Debug Module to control hart in Debug Mode", volatile = true))),
+        ABSTRACT(cfg) -> RegFieldGroup("debug_abstract", Some("Instructions generated by Debug Module"),
+          abstractGeneratedMem.zipWithIndex.map{ case (x,i) => RegField.r(32, x, RegFieldDesc(s"debug_abstract_$i", "", volatile=true))}),
+        FLAGS         -> RegFieldGroup("debug_flags", Some("Memory region used to control hart going/resuming in Debug Mode"),
+          if (nComponents == 1) {
+            Seq.tabulate(1024) { i => RegField.r(8, flags(0).asUInt, RegFieldDesc(s"debug_flags_$i", "", volatile=true)) }
+          } else {
+            flags.zipWithIndex.map{case(x, i) => RegField.r(8, x.asUInt, RegFieldDesc(s"debug_flags_$i", "", volatile=true))}
+          }),
+        ROMBASE       -> RegFieldGroup("debug_rom", Some("Debug ROM"),
+          (if (cfg.atzero) DebugRomContents() else DebugRomNonzeroContents()).zipWithIndex.map{case (x, i) =>
+            RegField.r(8, (x & 0xFF).U(8.W), RegFieldDesc(s"debug_rom_$i", "", reset=Some(x)))})
+      )
     )
 
     // Override System Bus accesses with dmactive reset.
