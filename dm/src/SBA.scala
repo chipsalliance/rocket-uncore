@@ -20,17 +20,17 @@ import org.chipsalliance.amba.axi4.bundle._
 // import freechips.rocketchip.util.property
 
 object SystemBusAccessState extends scala.Enumeration {
-   type SystemBusAccessState = Value
-   val Idle, SBReadRequest, SBWriteRequest, SBReadResponse, SBWriteResponse = Value
-} 
+  type SystemBusAccessState = Value
+  val Idle, SBReadRequest, SBWriteRequest, SBReadResponse, SBWriteResponse = Value
+}
 
 object SBErrorCode extends scala.Enumeration {
   type SBErrorCode = Value
-  val NoError    = Value(0)
-  val Timeout    = Value(1)
-  val BadAddr    = Value(2)
-  val AlgnError  = Value(3)
-  val BadAccess  = Value(4)
+  val NoError = Value(0)
+  val Timeout = Value(1)
+  val BadAddr = Value(2)
+  val AlgnError = Value(3)
+  val BadAccess = Value(4)
   val OtherError = Value(7)
 }
 
@@ -65,7 +65,7 @@ object SBErrorCode extends scala.Enumeration {
 
 //     val SBCSWrDataVal      = WireInit(0.U(32.W))
 //     val SBCSWrData         = WireInit(SBCSWrDataVal.asTypeOf(new SBCSFields()))
-    
+
 //     val sberrorWrEn        = WireInit(false.B)
 //     val sbreadondataWrEn   = WireInit(false.B)
 //     val sbautoincrementWrEn= WireInit(false.B)
@@ -137,7 +137,7 @@ object SBErrorCode extends scala.Enumeration {
 //       Cat(SBADDRESSFieldsReg.reverse))
 //     anyAddressWrEn         := SBADDRESSWrEn.reduce(_ || _)
 
-//     // --- System Bus Data Registers ---           
+//     // --- System Bus Data Registers ---
 //     // DATA0 Register is required
 //     // DATA1-3 Registers may not be needed depending on implementation
 //     val hasSBData1     = (cfg.maxSupportedSBAccess >   32)
@@ -242,7 +242,7 @@ object SBErrorCode extends scala.Enumeration {
 //     SBCSRdData.sbaccess8   := (cfg.maxSupportedSBAccess >=   8).B
 //     SBCSRdData.sbbusy      := sbBusy
 //     SBCSRdData.sberror     := sbErrorReg.asUInt
-    
+
 //     when (~dmAuthenticated) {    // Read value must be 0 if not authenticated
 //       SBCSRdData := 0.U.asTypeOf(new SBCSFields())
 //     }
@@ -293,7 +293,7 @@ object SBErrorCode extends scala.Enumeration {
 //     val rf_reset       = IO(Input(Reset()))
 
 //     import SystemBusAccessState._
- 
+
 //     val (tl, edge) = node.out(0)
 
 //     val sbState = RegInit(0.U)
@@ -354,7 +354,7 @@ object SBErrorCode extends scala.Enumeration {
 //       sbState := Mux(io.rdEn && io.rdLegal, SBReadRequest.id.U,
 //                  Mux(io.wrEn && io.wrLegal, SBWriteRequest.id.U, sbState))
 //     }.elsewhen (sbState === SBReadRequest.id.U){
-//       sbState := Mux(requestValid && requestReady, SBReadResponse.id.U, sbState) 
+//       sbState := Mux(requestValid && requestReady, SBReadResponse.id.U, sbState)
 //     }.elsewhen (sbState === SBWriteRequest.id.U){
 //       sbState := Mux(wrTxValid && txLast, SBWriteResponse.id.U, sbState)
 //     }.elsewhen (sbState === SBReadResponse.id.U){
@@ -362,11 +362,11 @@ object SBErrorCode extends scala.Enumeration {
 //     }.elsewhen (sbState === SBWriteResponse.id.U){
 //       sbState := Mux(responseValid && responseReady, Idle.id.U, sbState)
 //     }
- 
+
 //     io.rdDone  := rdTxValid && txLast
 //     io.wrDone  := (sbState === SBWriteResponse.id.U) && responseValid && responseReady
 //     io.dataOut := d.bits.data
- 
+
 //     tl.a.valid := (sbState === SBReadRequest.id.U) || (sbState === SBWriteRequest.id.U)
 
 //     // Tie off unused channels
@@ -376,8 +376,8 @@ object SBErrorCode extends scala.Enumeration {
 
 //     assert (sbState === Idle.id.U ||
 //             sbState === SBReadRequest.id.U ||
-//             sbState === SBWriteRequest.id.U || 
-//             sbState === SBReadResponse.id.U ||          
+//             sbState === SBWriteRequest.id.U ||
+//             sbState === SBReadResponse.id.U ||
 //             sbState === SBWriteResponse.id.U, "SBA state machine in undefined state")
 
 //     property.cover (sbState === Idle.id.U,            "SBA State Cover", "SBA Access Idle")
@@ -388,6 +388,6 @@ object SBErrorCode extends scala.Enumeration {
 
 //     property.cover (io.rdEn && !io.rdLegal, "SB Legality Cover", "SBA Rd Address Illegal")
 //     property.cover (io.wrEn && !io.wrLegal, "SB Legality Cover", "SBA Wr Address Illegal")
- 
+
 //   }
 // }

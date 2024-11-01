@@ -3,7 +3,7 @@
 package freechips.rocketchip.devices.debug
 
 import chisel3._
-import chisel3.util.{DecoupledIO, log2Up}
+import chisel3.util.{log2Up, DecoupledIO}
 import chisel3.experimental.dataview.DataViewable
 import chisel3.experimental.hierarchy.{instantiable, Instance, Instantiate}
 import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
