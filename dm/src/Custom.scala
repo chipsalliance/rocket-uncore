@@ -1,6 +1,7 @@
-// See LICENSE.SiFive for license details.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024 Jiuyang Liu <liu@jiuyang.me>
 
-package freechips.rocketchip.devices.debug
+package org.chipsalliance.uncore.dm
 
 import chisel3._
 import chisel3.util.{log2Up, DecoupledIO}
